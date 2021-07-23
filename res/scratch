@@ -1,0 +1,312 @@
+
+INSIDE SETUP() ---------------------------------------------
+
+// this.uvX = this.spriteSizeX/this.imgWidth;
+// this.uvY = this.spriteSizeY/this.imgHeight;
+
+//setup animation handler
+// this.animHandler = new AnimHandler(6, {width:this.imgWidth/this.spriteSizeX, height:this.imgHeight/this.spriteSizeY});
+// this.animHandler.setAnimation(0);
+
+//setup the image and bind to shader
+// this.testImage = this.loadTexture(this.imageURL, this.imgWidth, this.imgHeight);
+// gl.activeTexture(gl.TEXTURE0+this.textureIndex);
+// gl.bindTexture(gl.TEXTURE_2D, this.testImage);
+
+----------------------------------------------------------
+
+INSIDE RENDER()
+
+//let frameVec2 = this.animHandler.calcFrames(count);
+
+----------------------------------------------------------
+
+INSIDE SETUPATTIBUTES() 
+
+//appending data to UV coords attribute
+// const uvBuffer = this.gl.createBuffer();
+// gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);  
+// gl.bufferData(gl.ARRAY_BUFFER, Sprite.createUVCoordArray(this.uvX, this.uvY), gl.STATIC_DRAW);
+
+//UV coords atrtibute
+// gl.bindBuffer(this.gl.ARRAY_BUFFER, uvBuffer);
+// this.material.set("aTexCoord");
+
+-----------------------------------------------------------
+
+INSIDE SETUPUNIFORMS()
+
+//upload image
+// this.material.set("uImage", gl.TEXTURE0+this.textureIndex);
+
+//upload frame
+// this.material.set("uFrame", 0, 0);
+
+-----------------------------------------------------------
+
+INSIDE UPDATEUNIFORMS()
+
+//updating animation frames
+// this.material.set("uFrame", framesX, framesY);
+
+----------------------------------------------------------------
+
+SPRITE CLASS
+
+constructor(game, gl, vs, fs, imageURL, spriteSizeX, spriteSizeY, imgWidth, imgHeight, startingPosX, startingPosY, textureIndex) {
+
+        this.game = game;
+        this.gl = gl;
+        this.vs = vs;
+        this.fs = fs;
+
+        this.imageURL = imageURL;
+        
+        this.spriteSizeX = spriteSizeX;
+        this.spriteSizeY = spriteSizeY;
+
+        this.imgWidth = imgWidth;
+        this.imgHeight = imgHeight;
+
+        this.startingPosX = startingPosX;
+        this.startingPosY = startingPosY;
+
+        this.textureIndex = textureIndex;
+
+        this.rectVertWidth = 1;
+        this.rectVertHeight = 1;
+
+        this.vertexData = [
+            //position        //color    //uv
+            0.5, -0.5, 0.0,   1,1,0,1,
+            0.5, 0.5, 0.0,    1,0,0,1,
+            -0.5, 0.5, 0.0,   0,0,1,1,
+            -0.5, -0.5, 0.0,  1,1,0,1,
+        ];
+
+        this.color = glMatrix.vec4.create();
+        glMatrix.vec4.set(this.color, this.color, [1,0,0,0]);
+    }
+
+    static createRectVertexArray(w=1.0, h=1.0) {
+        return new Float32Array([
+            w, -h, 0.0,   //v0
+            w, h, 0.0,    //v1
+            -w, h, 0.0,   //v2
+            -w, -h, 0.0,   //v3
+        ]);
+    }
+
+    static createElementArray() {
+
+        /*
+                2       1                                               
+                                element array shows the order of rendering of each vertex 
+                                top right triangle vertices are loaded first then the bottom left triangle
+                3       0                      
+        */    
+        
+        return new Uint16Array([
+            1, 2, 0,
+            0, 2, 3,
+        ]);
+    }
+
+    static createUVCoordArray(uvX, uvY=1) {
+        let x = 0;
+
+        return new Float32Array([
+            /*
+                2       1                       (0,1)      (1,1)                                                
+                            ==> map to uv ==>                          
+            
+                3       0                       (0,0)      (1,0)                                                
+
+
+                3       0                                                 (0,1)       (1,1) 
+                            ==> vertically flipped because of gl bs ==>  
+
+                2       1                                                 (0,0)       (1,0) 
+            */    
+
+                // uvX,uvY, //v0
+                // uvX,0, //v1
+                // 0,0, //v2
+                // 0,uvY, //v3
+
+                uvX,0, //v0
+                uvX,uvY, //v1
+                0,uvY, //v2
+                0,0, //v3
+        ]);
+    }
+
+    setup() {
+
+        this.startingPos = glMatrix.vec3.create();
+        glMatrix.vec3.set(this.startingPos, this.startingPosX, this.startingPosY, 0);
+
+        //import matrix functions and create an identity matrix
+        this.mat4 = glMatrix.mat4;
+        this.spriteMatrix = this.mat4.create();
+
+        //initialize shader program by making new Material object
+        this.material = new Material(this.gl, this.vs, this.fs);
+        
+        let gl = this.gl;
+
+        gl.useProgram(this.material.program);
+
+        this.setupAttributes(Sprite.createRectVertexArray(this.rectVertWidth/2, this.rectVertHeight/2));
+
+        this.setupUniforms();
+    
+        gl.useProgram(null);
+
+
+    }
+
+    render(delta, count) {
+        
+        let gl = this.gl;
+
+        gl.useProgram(this.material.program);
+
+        this.updateAttributes(delta);
+        this.updateUniforms(delta, 0, 0);
+        
+        this.gl.drawElements(this.gl.TRIANGLES, 6, this.gl.UNSIGNED_SHORT, 0);
+
+        gl.useProgram(null);
+    }
+
+    loadTexture(url, width, height) {
+        let gl = this.gl;
+
+        const texture = gl.createTexture();
+        const image = new Image(width, height);
+
+        image.onload =  e => {
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+            gl.generateMipmap(gl.TEXTURE_2D);
+
+            
+        };
+
+        image.src = url;
+        
+        return texture;
+    }
+    
+    setupAttributes(rectVertexArray=Sprite.createRectVertexArray(0.5,0.5)) {
+        let gl = this.gl;
+
+        //************************************************************
+        //          loading data to each attribute
+        //************************************************************
+
+        const vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.vertexData), gl.STATIC_DRAW);
+
+        //appendign data to EBO
+        const elementBuffer = this.gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elementBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, Sprite.createElementArray(), gl.STATIC_DRAW);
+        
+        //************************************************************
+        //          setting up VAO and the attributes 
+        //************************************************************
+
+        const vao = this.gl.createVertexArray();
+        gl.bindVertexArray(vao);
+
+        this.gl.vertexAttribPointer(0, 3, this.gl.FLOAT, false, 7*4, 0);
+        this.gl.enableVertexAttribArray(0);
+
+        this.gl.vertexAttribPointer(1, 4, this.gl.FLOAT, false, 7*4, (0+3)*4);
+        this.gl.enableVertexAttribArray(1);
+
+        //EBO attribute
+        this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, elementBuffer);
+        
+    }
+
+    setupUniforms() {
+        let gl = this.gl;
+        
+        //upload matrix (apply some tranforms first)
+        this.mat4.rotateZ(this.spriteMatrix, this.spriteMatrix, Math.PI);
+        this.material.set("uObjMat", this.spriteMatrix);
+
+        //upload world Matrix
+        this.material.set("uWorldMat", this.game.getWorldMatrix());
+        
+    }
+
+    updateAttributes() {
+        
+        //updating object matrix
+        // this.mat4.rotateZ(this.matrix, this.matrix, delta);
+        // gl.uniformMatrix4fv(this.matrixLocation, false, this.matrix);
+
+    }
+
+    updateUniforms(delta,framesX=0,framesY=0) {
+
+        //updating world matrix
+        this.material.set("uWorldMat", this.game.getWorldMatrix());
+        
+    }
+
+    getColor() {
+        return this.color;
+    }
+
+
+    addSprite(sprite) {
+        if(this.freeIndices.length > 3) {
+            for(let i=0; i<this.spriteArray.length; i++) {
+                if(this.spriteArray[i] == null) {
+                    this.spriteArray[i] = sprite;
+                    break;
+                }
+            }
+
+            this.numSprites++;
+
+            if(sprite.getTexture() != null) {
+                if(!this.textures.includes(sprite.getTexture())) {
+                    this.textures.push(sprite.getTexture());
+                }
+            }
+            for(let i=0; i<4; i++) {
+                this.loadVertexProperties(this.freeIndices[i]);
+            }
+            this.freeIndices.splice(0,4);
+        } 
+        else {
+            this.spriteArray.push(sprite);
+            this.numAllocatedSpriteData++;
+            this.numSprites++;
+
+            if(sprite.getTexture() != null) {
+                if(!this.textures.includes(sprite.getTexture())) {
+                    this.textures.push(sprite.getTexture());
+                }
+            }
+            // Add properties to local vertices array
+            this.loadVertexProperties(this.spriteArray.length-1);
+
+            if (this.numAllocatedSpriteData >= this.maxBatchSize) {
+                this.hasRoom = false;
+            }
+        }
+        
+    } 

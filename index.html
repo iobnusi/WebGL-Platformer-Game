@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" media="screen" href="main.css" />
+    <script src="util/gl-matrix-min.js" defer></script>
+    <script src="main.js" defer></script>
+    <script src="engine/shader.js" defer></script>
+    <script src="util/assetPool.js" defer></script>
+    <script src="engine/sprite.js" defer></script>
+    <script src="engine/scene.js" defer></script>
+    <script src="engine/animHandler.js" defer></script>
+    <script src="engine/mouseListener.js" defer></script>
+    <script src="engine/spriteExtensions.js" defer></script>
+    <script src="engine/texture.js" defer></script>
+    <script src="renderer/renderer.js" defer></script>
+    <script src="renderer/renderBatch.js" defer></script>
+    <script>
+        window.addEventListener("load", function() {
+            let resX =1280;
+            let resY =720;
+            window.game = new Game(resX, resY);
+            
+            // if(window.innerWidth<resX || window.innerHeight<resY) {
+            //     if(window.innerWidth<resX && !(window.innerHeight<resY)) {
+            //         window.game.resizeCanvas(window.innerWidth, resY);
+            //     } else if(!(window.innerWidth<resX) && window.innerHeight<resY) {
+            //         window.game.resizeCanvas(resX, window.innerHeight);
+            //     } else {
+            //         window.game.resizeCanvas(window.innerWidth, window.innerHeight);
+            //     }
+            // }
+            window.game.resizeCanvas(resX, resY);
+            start();
+        });
+        // window.addEventListener("resize", function() {
+        //     let resX =1280;
+        //     let resY =720;
+        //     if(window.innerWidth<resX || window.innerHeight<resY) {
+        //         if(window.innerWidth<resX && !(window.innerHeight<resY)) {
+        //             window.game.resizeCanvas(window.innerWidth, resY);
+        //         } else if(!(window.innerWidth<resX) && window.innerHeight<resY) {
+        //             window.game.resizeCanvas(resX, window.innerHeight);
+        //         } else {
+        //             window.game.resizeCanvas(window.innerWidth, window.innerHeight);
+        //         }
+        //     }
+        //     else window.game.resizeCanvas(resX, resY);
+        // });
+    </script>
+    <script type="vertex_shader" id="vs_01"> 
+
+        attribute vec3 vPosition;
+        attribute vec4 vColor;
+        attribute vec2 vTexCoord;
+        attribute float vtexID;
+
+        //uniform mat4 uObjMat;
+        //uniform vec2 uFrame;
+        uniform mat4 uWorldMat;
+
+        varying vec4 fColor;
+        varying float fTexID;
+        varying vec2 fTexCoord;
+        
+        //varying vec2 vFrame;
+        
+        void main() {
+            //gl_Position = uWorldMat * uObjMat * vec4(vPosition, 1);
+            gl_Position = uWorldMat * vec4(vPosition, 1);
+            //gl_Position = vec4(vPosition, 1);
+            
+            //vTexCoord = aTexCoord + uFrame;
+            
+            fColor = vColor;
+            fTexID = vtexID;
+            fTexCoord = vTexCoord;
+        }
+    </script>
+    <script type="fragment_shader" id="fs_01">
+        precision mediump float;
+        
+        uniform sampler2D uImages[8];
+        //uniform int id = 1;
+
+        varying vec4 fColor;
+        varying float fTexID;
+        varying vec2 fTexCoord;
+
+        void main() {
+            
+            //gl_FragColor = texture2D(uImage, vTexCoord);
+            int id = int(fTexID);
+
+            for(int x=0; x<8; x++) {
+                if(x==id) {
+                    gl_FragColor = fColor * texture2D(uImages[x], fTexCoord);
+                }
+            } 
+            
+        }
+        
+    </script>
+</head>
+<body>
+    <h1 id="header"></h1>
+</body>
+</html>

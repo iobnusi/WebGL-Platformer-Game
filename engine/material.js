@@ -1,0 +1,219 @@
+class Material {
+
+    constructor(gl, vs, fs) {
+        this.gl = gl;
+
+        let vsShader = this.getShader(vs, gl.VERTEX_SHADER);
+        let fsShader = this.getShader(fs, gl.FRAGMENT_SHADER);
+
+        if(vsShader && fsShader) {
+            this.program = gl.createProgram();
+            gl.attachShader(this.program, vsShader);
+            gl.attachShader(this.program, fsShader);
+            gl.linkProgram(this.program);
+
+            if(!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+                console.error("Cannot load Shader \n" + gl.getProgramInfoLog(this.program));
+                return null;
+            }
+
+            this.gatherParameters();
+
+            gl.detachShader(this.program, vsShader);
+            gl.detachShader(this.program, fsShader);
+            gl.deleteShader(vsShader);
+            gl.deleteShader(fsShader);
+
+            gl.useProgram(null);
+        }
+    }
+
+    getShader(script, type) {
+        let gl = this.gl;
+        var output = gl.createShader(type);
+        gl.shaderSource(output, script);
+        gl.compileShader(output);
+
+        if(!gl.getShaderParameter(output, gl.COMPILE_STATUS)) {
+            console.error("Shader error: \n" + gl.getShaderInfoLog(output));
+            return null;
+        }
+
+        return output;
+    }
+
+    gatherParameters(){
+		let gl = this.gl;
+		let isUniform = 0;
+		
+		this.parameters = {};
+		
+		while(isUniform < 2){
+			let paramType = isUniform ? gl.ACTIVE_UNIFORMS : gl.ACTIVE_ATTRIBUTES;
+			let count = gl.getProgramParameter(this.program, paramType);
+			
+			for(let i=0; i < count; i++){
+				let details;
+				let location;
+				if(isUniform){
+					details = gl.getActiveUniform(this.program, i);
+					location = gl.getUniformLocation(this.program, details.name);
+				} else {
+					details = gl.getActiveAttrib(this.program, i);
+					location = gl.getAttribLocation(this.program, details.name);
+				}
+				
+				this.parameters[details.name] = {
+					location : location,
+					uniform : !!isUniform,
+					type : details.type
+				}
+			}
+			isUniform++;
+		}
+	}
+
+    set(name, a, b, c, d, e){
+		let gl = this.gl;
+		if(name in this.parameters){
+			let param = this.parameters[name];
+			if(param.uniform){
+				switch(param.type){
+					case gl.FLOAT: gl.uniform1f(param.location, a); break;
+					case gl.FLOAT_VEC2: gl.uniform2f(param.location, a, b); break;
+					case gl.FLOAT_VEC3: gl.uniform3f(param.location, a, b, c); break;
+					case gl.FLOAT_VEC4: gl.uniform4f(param.location, a, b, c, d); break;
+					case gl.FLOAT_MAT3: gl.uniformMatrix3fv(param.location, false, a); break;
+					case gl.FLOAT_MAT4: gl.uniformMatrix4fv(param.location, false, a); break;
+					case gl.SAMPLER_2D: gl.uniform1i(param.location, a); break;
+				}
+			} else {
+				gl.enableVertexAttribArray(param.location);
+				
+				if(a == undefined) a = gl.FLOAT;
+				if(b == undefined) b = false;
+				if(c == undefined) c = 0;
+				if(d == undefined) d = 0;
+				
+				switch(param.type){
+					case gl.FLOAT : gl.vertexAttribPointer(param.location, 1, a, b, c, d); break;
+					case gl.FLOAT_VEC2 : gl.vertexAttribPointer(param.location, 2, a, b, c, d); break;
+					case gl.FLOAT_VEC3 : gl.vertexAttribPointer(param.location, 3, a, b, c, d); break;
+					case gl.FLOAT_VEC4 : gl.vertexAttribPointer(param.location, 4, a, b, c, d); break;
+				}
+			}
+		}
+	}
+}
+
+class Sprite {
+
+    constructor(gl, startingPosX, startingPosY, color, imageURL=null) {
+        this.gl = gl;
+        this.startingPosX = startingPosX;
+        this.startingPosY = startingPosY;
+        this.color = color;
+        this.imageURL = imageURL;
+        
+        this.texCoords = [];
+
+        this.setup();
+    }
+
+    setup() {
+        if(this.imageURL!=null) {
+            this.texture = this.loadImage();
+        } else {
+            this.texture = null;
+        }
+    }
+
+    getColor() {
+        return new Float32Array([
+            1,1,1,1
+        ]);
+    }
+
+    getScale() {
+        return 0.5;
+    }
+
+    getTexture() {
+        return this.texture;
+    }
+
+    getTexCoords() {
+        return [
+            1,0, //v0
+            1,1, //v1
+            0,1, //v2
+            0,0, //v3
+        ];
+    }
+
+    loadImage() {
+        let gl = this.gl;
+
+        const texture = gl.createTexture();
+        const image = new Image();
+
+        image.onload =  e => {
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+            gl.generateMipmap(gl.TEXTURE_2D);
+        };
+
+        image.src = this.imageURL;
+        
+        return texture;
+    }
+}
+
+class AnimHandler {
+
+    constructor(animSpeed,  gridDim={}) {
+        this.animSpeed = animSpeed;
+
+        if("width" in gridDim && "height" in gridDim){
+			this.numOfFramesPerRow = gridDim.width;
+            this.animAmountMax = gridDim.height;
+		}
+
+        this.frameAmount = this.numOfFramesPerRow;
+        this.animTypeIndex;
+        this.frameVec2 = glMatrix.vec2.create();
+    }
+
+    setAnimation(animTypeIndex) {
+        if(animTypeIndex>this.animAmountMax-1) {
+            console.error("Error : Animation index out of bounds");
+            return;
+        } 
+        this.animTypeIndex = animTypeIndex/this.animAmountMax;
+
+    }
+
+    calcFrames(count) {
+        if(this.animTypeIndex==undefined) {
+            console.error(`Error : No animation has been set for this sprite. Use AnimHandler.setAnimation(animTypeIndex) to set animations.`);
+            return;
+        }
+
+        let currentframeNum = (Math.floor(count*this.animSpeed) % this.frameAmount);
+        
+        let currentFrameCoord = currentframeNum/this.numOfFramesPerRow;
+        
+        glMatrix.vec2.set(this.frameVec2, currentFrameCoord, this.animTypeIndex);
+        
+        return this.frameVec2;
+
+    }
+}
+
+
+       
